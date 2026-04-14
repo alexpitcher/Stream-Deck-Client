@@ -1,93 +1,117 @@
 import Foundation
 
-// MARK: - Client -> Host Messages
+// MARK: - Base Envelope
 
-struct IdentifyMessage: Encodable {
-    let type = "Identify"
+struct Envelope<T: Codable>: Codable {
+    let v: Int
+    let type: String
     let client_id: String
+    var req_id: String?
+    let payload: T
+    
+    init(type: String, client_id: String, req_id: String? = nil, payload: T) {
+        self.v = 1
+        self.type = type
+        self.client_id = client_id
+        self.req_id = req_id
+        self.payload = payload
+    }
+}
+
+// A generic envelope decoder just to parse out the 'type'
+struct AnyDecodableEnvelope: Decodable {
+    let v: Int
+    let type: String
+    let client_id: String
+    let req_id: String?
+}
+
+// MARK: - Client -> Host Payloads
+
+struct IdentifyPayload: Codable {
     let token: String
 }
 
-struct ActionDefinition: Encodable {
+struct ActionDefinition: Codable, Identifiable {
+    var id: String { button_id } // For SwiftUI
     let button_id: String
-    let label: String
+    var label: String?
+    var iconData: String?       // Base64 encoded asset if any
+    var preferred_slot: Int?
+    var preferred_page: Int?
 }
 
-struct RegisterActionsMessage: Encodable {
-    let type = "RegisterActions"
+struct RegisterActionsPayload: Codable {
     let actions: [ActionDefinition]
 }
 
-struct StateUpdateMessage: Encodable {
-    let type = "StateUpdate"
+struct StateUpdatePayload: Codable {
     let button_id: String
-    let label: String
+    var label: String?
+    var iconData: String?
 }
 
-// MARK: - Host -> Client Messages
+// MARK: - Host -> Client Payloads
 
-struct IdentifyAckMessage: Decodable {
+struct IdentifyAckPayload: Codable {
     let status: String
     let message: String?
 }
 
-struct Assignment: Decodable {
+struct Assignment: Codable, Identifiable {
+    var id: String { button_id }
     let button_id: String
     let slot: Int
+    let page: Int?
 }
 
-struct AssignmentUpdateMessage: Decodable {
+struct AssignmentUpdatePayload: Codable {
     let assignments: [Assignment]
 }
 
-struct ActionTriggeredMessage: Decodable {
-    let client_id: String
+struct ActionTriggeredPayload: Codable {
     let button_id: String
 }
 
-struct ErrorMessage: Decodable {
+struct ErrorPayload: Codable {
     let code: String
     let message: String
 }
 
-// MARK: - Event Types
+// MARK: - Internal Transport Types
 
 enum ServerEvent {
-    case identifyAck(IdentifyAckMessage)
-    case assignmentUpdate(AssignmentUpdateMessage)
-    case actionTriggered(ActionTriggeredMessage)
-    case error(ErrorMessage)
+    case identifyAck(Envelope<IdentifyAckPayload>)
+    case assignmentUpdate(Envelope<AssignmentUpdatePayload>)
+    case actionTriggered(Envelope<ActionTriggeredPayload>)
+    case error(Envelope<ErrorPayload>)
     case unknown(String)
 }
 
 struct MessageDecoder {
-    struct BaseMessage: Decodable {
-        let type: String
-    }
-    
     static func decode(data: Data) -> ServerEvent? {
         let decoder = JSONDecoder()
         
-        guard let base = try? decoder.decode(BaseMessage.self, from: data) else {
+        guard let base = try? decoder.decode(AnyDecodableEnvelope.self, from: data) else {
             return nil
         }
         
         switch base.type {
         case "IdentifyAck":
-            if let msg = try? decoder.decode(IdentifyAckMessage.self, from: data) {
-                return .identifyAck(msg)
+            if let env = try? decoder.decode(Envelope<IdentifyAckPayload>.self, from: data) {
+                return .identifyAck(env)
             }
         case "AssignmentUpdate":
-            if let msg = try? decoder.decode(AssignmentUpdateMessage.self, from: data) {
-                return .assignmentUpdate(msg)
+            if let env = try? decoder.decode(Envelope<AssignmentUpdatePayload>.self, from: data) {
+                return .assignmentUpdate(env)
             }
         case "ActionTriggered":
-            if let msg = try? decoder.decode(ActionTriggeredMessage.self, from: data) {
-                return .actionTriggered(msg)
+            if let env = try? decoder.decode(Envelope<ActionTriggeredPayload>.self, from: data) {
+                return .actionTriggered(env)
             }
         case "Error":
-            if let msg = try? decoder.decode(ErrorMessage.self, from: data) {
-                return .error(msg)
+            if let env = try? decoder.decode(Envelope<ErrorPayload>.self, from: data) {
+                return .error(env)
             }
         default:
             return .unknown(base.type)
