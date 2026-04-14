@@ -82,6 +82,31 @@ client.onEvent = { event in
     }
 }
 
+client.onShutdownComplete = {
+    print("Clean disconnect complete. Exiting.")
+    exit(0)
+}
+
+// MARK: - OS Signal Traps
+
+// Ignore default abrupt kills so GCD can handle the teardown
+signal(SIGINT, SIG_IGN)
+signal(SIGTERM, SIG_IGN)
+
+let sigIntSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
+sigIntSource.setEventHandler {
+    print("\nCaught SIGINT. Disconnecting gracefully...")
+    client.disconnect()
+}
+sigIntSource.resume()
+
+let sigTermSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+sigTermSource.setEventHandler {
+    print("\nCaught SIGTERM. Disconnecting gracefully...")
+    client.disconnect()
+}
+sigTermSource.resume()
+
 // MARK: - Execution
 
 print("Initiating connection to ws://\(host):\(port)...")

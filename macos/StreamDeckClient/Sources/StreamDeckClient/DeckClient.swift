@@ -10,6 +10,7 @@ class DeckClient {
     var onEvent: ((ServerEvent) -> Void)?
     var onDisconnect: (() -> Void)?
     var onConnected: (() -> Void)?
+    var onShutdownComplete: (() -> Void)?
     
     // Resilience State
     private var isConnected = false
@@ -92,6 +93,11 @@ class DeckClient {
     func disconnect() {
         isIntentionalDisconnect = true
         performHardwareDisconnect()
+        
+        // Wait briefly for URLSession to send the `.normalClosure` frame
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            self.onShutdownComplete?()
+        }
     }
     
     private func performHardwareDisconnect() {
