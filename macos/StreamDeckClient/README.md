@@ -43,3 +43,10 @@ swift run StreamDeckClient --host 192.168.1.100 --port 8765 --token mySecretToke
 4. It listens for `AssignmentUpdate` to log the slots.
 5. It handles `ActionTriggered` events when you press a key on the Stream Deck.
 6. On the first `btn_mute` trigger, it will send a `StateUpdate` to change the physical button's label to "**MUTED**".
+
+## Network Resilience
+This client is designed as a background-ready production daemon. It features robust networking out of the box:
+- **Ping/Pong Heartbeats**: Sends WebSocket keep-alives every 15 seconds to prevent routers from aggressively expiring the TCP tunnel.
+- **NWPathMonitor Hook**: Actively detects when macOS drops Wi-Fi or swaps network paths, forcefully invalidating dead connections rather than waiting for heavy TCP timeouts.
+- **Exponential Backoff**: If the host drops, the client automatically catches it, spins up, and scales back reconnect attempts from 1s up to ~30s dynamically without crashing.
+- **Offline Send Queueing**: Commands dispatched while the socket is physically disconnected are buffered into memory and instantly fast-flushed down the pipe the moment the connection and `IdentifyAck` authenticates successfully.
