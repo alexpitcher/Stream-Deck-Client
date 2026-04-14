@@ -10,6 +10,8 @@ class AppState: ObservableObject {
     
     @Published var isConnected: Bool = false
     
+    @Published var lastError: String? = nil
+    
     // Core local authoritative models
     @Published var registeredButtons: [ActionDefinition] = [
         ActionDefinition(button_id: "btn_mute", label: "Mute", iconData: nil, preferred_slot: 0, preferred_page: 0),
@@ -26,6 +28,7 @@ class AppState: ObservableObject {
         if isConnected || client != nil {
             disconnect()
         } else {
+            lastError = nil
             connect()
         }
     }
@@ -36,9 +39,16 @@ class AppState: ObservableObject {
         client?.onConnected = { [weak self] in
             guard let self = self else { return }
             self.isConnected = true
+            self.lastError = nil
             
             // 1. Authenticate immediately
-            let identify = Envelope(type: "Identify", client_id: self.clientId, payload: IdentifyPayload(token: self.token))
+            // Sanitise token — strip whitespace and any surrounding quote chars that
+            // AppStorage may have cached from a previous session (e.g. stored as `"secret"`).
+            let cleanToken = self.token
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+            print("[AUTH] Sending token: '\(cleanToken)' (raw bytes: \(Array(cleanToken.utf8)))")
+            let identify = Envelope(type: "Identify", client_id: self.clientId, payload: IdentifyPayload(token: cleanToken))
             self.client?.send(identify)
             
             // 2. Register all buttons
@@ -65,6 +75,10 @@ class AppState: ObservableObject {
     }
     
     private func disconnect() {
+        // Explicitly clear state first so UI updates immediately,
+        // regardless of whether the async onDisconnect callback fires.
+        isConnected = false
+        activeAssignments.removeAll()
         client?.disconnect()
         client = nil
     }
@@ -91,7 +105,17 @@ class AppState: ObservableObject {
         case .actionTriggered(let env):
             print("Physical Action Triggered: \(env.payload.button_id)")
         case .error(let env):
-            print("Server Protocol Error: \(env.payload.message)")
+            let msg = "[\(env.payload.code)] \(env.payload.message)"
+            print("Server Protocol Error: \(msg)")
+            self.lastError = msg
+            
+            if env.payload.code == "superseded" {
+                print("Connection superseded by another client instance. Exiting cleanly.")
+                exit(0)
+            } else if env.payload.code == "auth_failed" {
+                // Instantly sever loop to prevent endless bouncing loops
+                disconnect()
+            }
         case .unknown(let type):
             print("Unknown packet type: \(type)")
         }

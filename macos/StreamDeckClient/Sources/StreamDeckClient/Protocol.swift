@@ -22,8 +22,16 @@ struct Envelope<T: Codable>: Codable {
 struct AnyDecodableEnvelope: Decodable {
     let v: Int
     let type: String
-    let client_id: String
+    let client_id: String?
     let req_id: String?
+}
+
+// Host sends flat errors on Auth failures without envelopes or payloads
+struct RawErrorMessage: Decodable {
+    let v: Int
+    let type: String
+    let code: String
+    let message: String
 }
 
 // MARK: - Client -> Host Payloads
@@ -110,8 +118,10 @@ struct MessageDecoder {
                 return .actionTriggered(env)
             }
         case "Error":
-            if let env = try? decoder.decode(Envelope<ErrorPayload>.self, from: data) {
-                return .error(env)
+            if let rawError = try? decoder.decode(RawErrorMessage.self, from: data) {
+                // Manually re-wrap the raw flattened error from Host so our system architecture still accepts Envelope syntax
+                let simulatedEnv = Envelope(type: "Error", client_id: base.client_id ?? "unknown", payload: ErrorPayload(code: rawError.code, message: rawError.message))
+                return .error(simulatedEnv)
             }
         default:
             return .unknown(base.type)

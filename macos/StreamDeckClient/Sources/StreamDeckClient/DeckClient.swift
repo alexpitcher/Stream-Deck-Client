@@ -163,26 +163,23 @@ class DeckClient {
             return
         }
         
-        DispatchQueue.main.async {
-            if self.isConnected {
-                self.sendRaw(jsonString)
-            } else {
-                // Queue the message if offline
-                self.messageQueue.append(jsonString)
-                print("Offline. Queued message.")
-            }
+        print("Sending [\(T.self)]: \(jsonString)")
+        
+        // Callers come from AppState (@MainActor), so we are already on main.
+        if isConnected {
+            sendRaw(jsonString)
+        } else {
+            messageQueue.append(jsonString)
+            print("Offline. Queued message.")
         }
     }
     
     func flushQueue() {
-        DispatchQueue.main.async {
-            guard self.isConnected else { return }
-            let queue = self.messageQueue
-            self.messageQueue.removeAll()
-            
-            for msg in queue {
-                self.sendRaw(msg)
-            }
+        guard isConnected else { return }
+        let queue = messageQueue
+        messageQueue.removeAll()
+        for msg in queue {
+            sendRaw(msg)
         }
     }
     
