@@ -9,6 +9,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "StreamDeckClient"
+        ),
+        .testTarget(
+            name: "StreamDeckClientTests",
+            dependencies: ["StreamDeckClient"]
         )
     ]
 )

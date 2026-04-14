@@ -13,13 +13,13 @@ class DeckClient {
     var onShutdownComplete: (() -> Void)?
     
     // Resilience State
-    private var isConnected = false
+    private(set) var isConnected = false
     private var isIntentionalDisconnect = false
     private var reconnectBackoff: TimeInterval = 1.0
     private let maxBackoff: TimeInterval = 30.0
     
     // Queueing
-    private var messageQueue: [String] = []
+    private(set) var messageQueue: [String] = []
     
     // Keep-Alive
     private var pingTimer: Timer?

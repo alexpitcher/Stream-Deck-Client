@@ -79,7 +79,7 @@ class AppState: ObservableObject {
         }
     }
     
-    private func handleEvent(_ event: ServerEvent) {
+    func handleEvent(_ event: ServerEvent) {
         switch event {
         case .identifyAck(let env):
             print("Identify OK: \(env.payload.status)")
